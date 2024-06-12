@@ -57,7 +57,11 @@ func Run(config Config) error {
 
 func generate(page notion.Page, blocks []notion.Block, config Markdown) error {
 	// Create file
-	pageName := config.PageNamePrefix + tomarkdown.ConvertRichText(page.Properties.(notion.DatabasePageProperties)["Name"].Title)
+
+	// fmt.Println("Page: ", page.Properties.(notion.DatabasePageProperties)["title"].Title)
+	// fmt.Println("Title: ", page.Properties.(notion.DatabasePageProperties)["title"].Title[0].Text.Content)
+	// pageName := config.PageNamePrefix + tomarkdown.ConvertRichText(page.Properties.(notion.DatabasePageProperties)["Name"].Title)
+	pageName := tomarkdown.ConvertRichText(page.Properties.(notion.DatabasePageProperties)["title"].Title)
 	f, err := os.Create(filepath.Join(config.PostSavePath, generateArticleFilename(pageName, page.CreatedTime, config)))
 	if err != nil {
 		return fmt.Errorf("error create file: %s", err)
