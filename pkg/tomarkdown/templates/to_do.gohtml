@@ -1,1 +1,2 @@
-{{if gt .Depth 0}}{{"    " | repeat .Depth}}{{end}}{{if deref .ToDo.Checked}}- [x]{{else}}- [ ]{{end}} {{ rich2md .ToDo.Text }}
+{{if gt .Depth 0}}{{"  " | repeat .Depth}}{{end}}{{if deref .ToDo.Checked}}- [x]{{else}}- [ ]{{end}} {{ rich2md .ToDo.Text }}
+{{if .Block.HasChildren}}{{"\n"}}{{end}}
