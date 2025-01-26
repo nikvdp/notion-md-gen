@@ -266,7 +266,9 @@ func (tm *ToMarkdown) saveTo(reader io.Reader, rawURL, distDir string) (string, 
 		return "", fmt.Errorf("%s: %s", distDir, err)
 	}
 
-	filename := fmt.Sprintf("%s_%s", u.Hostname(), imageFilename)
+	// Create a unique filename using the full URL path to avoid collisions
+	urlPath := strings.Join(splitPaths, "_")
+	filename := fmt.Sprintf("%s_%s_%s", u.Hostname(), urlPath, imageFilename)
 	out, err := os.Create(filepath.Join(distDir, filename))
 	if err != nil {
 		return "", fmt.Errorf("couldn't create image file: %s", err)
