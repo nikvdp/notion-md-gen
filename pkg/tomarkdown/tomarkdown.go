@@ -372,7 +372,19 @@ func (tm *ToMarkdown) injectFrontMatterCover(cover *notion.Cover) {
 func ConvertRichText(t []notion.RichText) string {
 	var buf bytes.Buffer
 	for _, word := range t {
-		buf.WriteString(ConvertRich(word))
+		content := ConvertRich(word)
+		// For code blocks, preserve indentation after newlines
+		if strings.Contains(content, "\n") {
+			lines := strings.Split(content, "\n")
+			for i, line := range lines {
+				if i > 0 {
+					buf.WriteString("\n  ") // Add indentation after newline
+				}
+				buf.WriteString(line)
+			}
+		} else {
+			buf.WriteString(content)
+		}
 	}
 	return buf.String()
 }
