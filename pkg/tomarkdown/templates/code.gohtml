@@ -2,6 +2,6 @@
     Indent the opening triple-backticks and the code itself by 2×Depth spaces 
     so it remains nested under the parent bullet or parent block. 
 */}}
-{{if gt .Depth 0}}{{"  " | repeat .Depth}}{{end}}```{{ .Code.Language }}
-{{if gt .Depth 0}}{{"  " | repeat .Depth}}{{end}}{{ rich2md .Code.Text }}
+{{if gt .Depth 0}}{{"  " | repeat .Depth}}{{end}}```{{.Code.Language}}
+{{if gt .Depth 0}}{{"  " | repeat .Depth}}{{end}}{{rich2md .Code.Text}}
 {{if gt .Depth 0}}{{"  " | repeat .Depth}}{{end}}```
