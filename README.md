@@ -51,6 +51,15 @@ notion-md-gen
 To use it as a Github Action, you can follow the example of the repository
 in [.github/worflows/notion.yml](.github/workflows/notion.yml).
 
+## Testing
+
+Tests are still WIP, but you can test code blocks by doing:
+
+```shell 
+pkg/tomarkdown
+go test -v -run=TestBlockConversion
+```
+
 ## Contributing
 
 See [CONTRIBUTING](CONTRIBUTING.md) for details on submitting patches and the contribution workflow.
