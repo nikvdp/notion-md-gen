@@ -5,7 +5,7 @@
       "text": [{
         "type": "text",
         "text": {
-          "content": "const a = 3"
+          "content": "const a = 3;\nconst x = 2;"
         }
       }],
       "language": "javascript"

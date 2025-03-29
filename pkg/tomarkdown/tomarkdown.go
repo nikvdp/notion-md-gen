@@ -195,6 +195,29 @@ func (tm *ToMarkdown) GenBlock(bType notion.BlockType, block MdBlock) error {
 	funcs := sprig.TxtFuncMap()
 	funcs["deref"] = func(i *bool) bool { return *i }
 	funcs["rich2md"] = ConvertRichText
+	funcs["indentCode"] = func(richText []notion.RichText, depth int) string {
+		// Get the content without any manipulation
+		content := ConvertRichText(richText)
+		
+		// If depth is 0, no indentation needed
+		if depth == 0 {
+			return content
+		}
+		
+		// Apply indentation based on depth
+		indent := strings.Repeat("  ", depth)
+		
+		// Split into lines for processing
+		lines := strings.Split(content, "\n")
+		
+		// Apply the correct indentation to each line
+		for i := 0; i < len(lines); i++ {
+			lines[i] = indent + lines[i]
+		}
+		
+		// Join lines back together
+		return strings.Join(lines, "\n")
+	}
 
 	tplName := fmt.Sprintf("%s.gohtml", bType)
 	t := template.New(tplName).Funcs(funcs)
@@ -373,18 +396,7 @@ func ConvertRichText(t []notion.RichText) string {
 	var buf bytes.Buffer
 	for _, word := range t {
 		content := ConvertRich(word)
-		// For code blocks, preserve indentation after newlines
-		if strings.Contains(content, "\n") {
-			lines := strings.Split(content, "\n")
-			for i, line := range lines {
-				if i > 0 {
-					buf.WriteString("\n  ") // Add indentation after newline
-				}
-				buf.WriteString(line)
-			}
-		} else {
-			buf.WriteString(content)
-		}
+		buf.WriteString(content)
 	}
 	return buf.String()
 }

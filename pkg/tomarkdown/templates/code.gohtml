@@ -1,7 +1,7 @@
 {{/* 
-    Indent the opening triple-backticks and the code itself by 2×Depth spaces 
-    so it remains nested under the parent bullet or parent block. 
+    Indent the opening triple-backticks, code content, and closing triple-backticks 
+    by 2×Depth spaces for proper nesting under the parent block.
 */}}
 {{if gt .Depth 0}}{{"  " | repeat .Depth}}{{end}}```{{.Code.Language}}
-{{if gt .Depth 0}}{{"  " | repeat .Depth}}{{end}}{{rich2md .Code.Text}}
+{{indentCode .Code.Text .Depth}}
 {{if gt .Depth 0}}{{"  " | repeat .Depth}}{{end}}```
