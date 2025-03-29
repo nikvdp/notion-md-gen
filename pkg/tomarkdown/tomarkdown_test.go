@@ -69,7 +69,7 @@ func testBlockConversionWithDepth(t *testing.T, depth int) {
 		// Look for a corresponding .md file (the golden file)
 		baseName := strings.TrimSuffix(path, ".json")
 		goldenFileName := fmt.Sprintf("%s.md", baseName)
-		
+
 		// Check if golden file exists
 		goldenFileData, err := testdatas.ReadFile(goldenFileName)
 		if err != nil {
@@ -77,7 +77,7 @@ func testBlockConversionWithDepth(t *testing.T, depth int) {
 			t.Logf("Skipping %s: no golden file found", path)
 			return nil
 		}
-		
+
 		// If we're testing with depth > 0, look for a depth-specific golden file first
 		if depth > 0 {
 			depthGoldenFileName := fmt.Sprintf("%s_depth%d.md", baseName, depth)
@@ -87,9 +87,9 @@ func testBlockConversionWithDepth(t *testing.T, depth int) {
 				goldenFileData = depthGoldenFileData
 			}
 		}
-		
+
 		expectedOutput := string(goldenFileData)
-		
+
 		// Read the JSON test file
 		blockBytes, err := testdatas.ReadFile(path)
 		if err != nil {
@@ -110,7 +110,7 @@ func testBlockConversionWithDepth(t *testing.T, depth int) {
 			tom := New()
 			tom.ImgSavePath = "/tmp/"
 			tom.ContentBuffer = new(bytes.Buffer) // Ensure we start with an empty buffer
-			
+
 			// For each block, create an MdBlock with the specified depth and render it directly
 			for _, block := range blocks {
 				mdBlock := MdBlock{
@@ -118,19 +118,19 @@ func testBlockConversionWithDepth(t *testing.T, depth int) {
 					Depth: depth,
 					Extra: make(map[string]interface{}),
 				}
-				
+
 				// Render the block using the appropriate template
 				if err := tom.GenBlock(block.Type, mdBlock); err != nil {
 					return "", fmt.Errorf("failed to render block: %v", err)
 				}
 			}
-			
+
 			// Get the content as a string
 			result := tom.ContentBuffer.String()
-			
+
 			// Remove the initial newline if present
 			result = strings.TrimPrefix(result, "\n")
-			
+
 			return result, nil
 		}
 
@@ -145,40 +145,42 @@ func testBlockConversionWithDepth(t *testing.T, depth int) {
 		if actualOutput != expectedOutput {
 			t.Errorf("Output mismatch for %s at depth %d:\nExpected:\n%s\n\nActual:\n%s",
 				path, depth, expectedOutput, actualOutput)
-			
-			// Add more detailed comparison for debugging
-			t.Errorf("Detailed comparison:")
-			t.Errorf("Expected length: %d, Actual length: %d", len(expectedOutput), len(actualOutput))
-			
-			// Print character codes for better visual inspection
-			t.Errorf("Expected output character codes:")
-			for i, c := range expectedOutput {
-				t.Errorf("  Index %d: '%c' (Code: %d)", i, c, c)
-			}
-			
-			t.Errorf("Actual output character codes:")
-			for i, c := range actualOutput {
-				t.Errorf("  Index %d: '%c' (Code: %d)", i, c, c)
-			}
-			
-			// Find the first differing position
-			minLen := len(expectedOutput)
-			if len(actualOutput) < minLen {
-				minLen = len(actualOutput)
-			}
-			
-			for i := 0; i < minLen; i++ {
-				if expectedOutput[i] != actualOutput[i] {
-					t.Errorf("First difference at position %d: Expected '%c' (Code: %d), Actual '%c' (Code: %d)",
-						i, expectedOutput[i], expectedOutput[i], actualOutput[i], actualOutput[i])
-					break
+
+			if false { // this is only for debugging the tests
+				// Add more detailed comparison for debugging
+				t.Errorf("Detailed comparison:")
+				t.Errorf("Expected length: %d, Actual length: %d", len(expectedOutput), len(actualOutput))
+
+				// Print character codes for better visual inspection
+				t.Errorf("Expected output character codes:")
+				for i, c := range expectedOutput {
+					t.Errorf("  Index %d: '%c' (Code: %d)", i, c, c)
 				}
-			}
-			
-			if len(expectedOutput) != len(actualOutput) && minLen == len(expectedOutput) {
-				t.Errorf("Expected output is shorter. Actual has extra characters starting at position %d", minLen)
-			} else if len(expectedOutput) != len(actualOutput) {
-				t.Errorf("Expected output is longer. Expected has extra characters starting at position %d", minLen)
+
+				t.Errorf("Actual output character codes:")
+				for i, c := range actualOutput {
+					t.Errorf("  Index %d: '%c' (Code: %d)", i, c, c)
+				}
+
+				// Find the first differing position
+				minLen := len(expectedOutput)
+				if len(actualOutput) < minLen {
+					minLen = len(actualOutput)
+				}
+
+				for i := 0; i < minLen; i++ {
+					if expectedOutput[i] != actualOutput[i] {
+						t.Errorf("First difference at position %d: Expected '%c' (Code: %d), Actual '%c' (Code: %d)",
+							i, expectedOutput[i], expectedOutput[i], actualOutput[i], actualOutput[i])
+						break
+					}
+				}
+
+				if len(expectedOutput) != len(actualOutput) && minLen == len(expectedOutput) {
+					t.Errorf("Expected output is shorter. Actual has extra characters starting at position %d", minLen)
+				} else if len(expectedOutput) != len(actualOutput) {
+					t.Errorf("Expected output is longer. Expected has extra characters starting at position %d", minLen)
+				}
 			}
 		} else {
 			t.Logf("Successfully tested %s at depth %d", path, depth)
