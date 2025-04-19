@@ -28,12 +28,12 @@ func Run(config Config) error {
 	fmt.Println("✔ Querying Notion database: Completed")
 
 	// helper to fetch, generate, and update status for a page
-	handlePage := func(i int, page notion.Page, blocks []notion.Block) error {
-		fmt.Println("✔ Getting blocks tree: Completed")
+	handlePage := func(i int, page notion.Page, blocks []notion.Block, displayName string) error {
+		fmt.Printf("[%-30s] ✔ getting blocks tree: completed\n", displayName)
 		if err := generate(page, blocks, config.Markdown); err != nil {
-			return fmt.Errorf("error generating blog post: %v", err)
+			return fmt.Errorf("[%-30s] error generating blog post: %v", displayName, err)
 		}
-		fmt.Println("✔ Generating blog post: Completed")
+		fmt.Printf("[%-30s] ✔ generating blog post: completed\n", displayName)
 		if changeStatus(client, page, config.Notion) {
 			// changed++ // not needed outside
 		}
@@ -46,29 +46,30 @@ func Run(config Config) error {
 		// fetch block trees in parallel using a semaphore
 		sem := make(chan struct{}, config.Parallelism)
 		type result struct {
-			i      int
-			page   notion.Page
-			blocks []notion.Block
-			err    error
+			i           int
+			page        notion.Page
+			blocks      []notion.Block
+			err         error
+			displayName string
 		}
 		results := make(chan result, len(q.Results))
 		for i, page := range q.Results {
+			displayName := getPageDisplayName(i, page)
 			sem <- struct{}{}
-			go func(i int, page notion.Page) {
+			go func(i int, page notion.Page, displayName string) {
 				defer func() { <-sem }()
-				pageName := tomarkdown.ConvertRichText(page.Properties.(notion.DatabasePageProperties)["Name"].Title)
-				fmt.Printf("-- Article [%d/%d] %s --\n", i+1, len(q.Results), pageName)
+				fmt.Printf("[%-30s] -- article [%d/%d] --\n", displayName, i+1, len(q.Results))
 				blocks, err := queryBlockChildren(client, page.ID)
-				results <- result{i, page, blocks, err}
-			}(i, page)
+				results <- result{i, page, blocks, err, displayName}
+			}(i, page, displayName)
 		}
 		// wait for all
 		for i := 0; i < len(q.Results); i++ {
 			res := <-results
 			if res.err != nil {
-				return fmt.Errorf("error getting blocks: %v", res.err)
+				return fmt.Errorf("[%-30s] error getting blocks: %v", res.displayName, res.err)
 			}
-			if err := handlePage(res.i, res.page, res.blocks); err != nil {
+			if err := handlePage(res.i, res.page, res.blocks, res.displayName); err != nil {
 				return err
 			}
 			if changeStatus(client, res.page, config.Notion) {
@@ -78,13 +79,13 @@ func Run(config Config) error {
 	} else {
 		// sequential fallback
 		for i, page := range q.Results {
-			pageName := tomarkdown.ConvertRichText(page.Properties.(notion.DatabasePageProperties)["Name"].Title)
-			fmt.Printf("-- Article [%d/%d] %s --\n", i+1, len(q.Results), pageName)
+			displayName := getPageDisplayName(i, page)
+			fmt.Printf("[%-30s] -- article [%d/%d] --\n", displayName, i+1, len(q.Results))
 			blocks, err := queryBlockChildren(client, page.ID)
 			if err != nil {
-				return fmt.Errorf("error getting blocks: %v", err)
+				return fmt.Errorf("[%-30s] error getting blocks: %v", displayName, err)
 			}
-			if err := handlePage(i, page, blocks); err != nil {
+			if err := handlePage(i, page, blocks, displayName); err != nil {
 				return err
 			}
 			if changeStatus(client, page, config.Notion) {
@@ -136,4 +137,20 @@ func generateArticleFilename(title string, date time.Time, config Markdown) stri
 	}
 
 	return escapedFilename
+}
+
+// getPageDisplayName returns a display name for a page: [index:PageName] or [index:PageID] if no name
+func getPageDisplayName(i int, page notion.Page) string {
+	props, ok := page.Properties.(notion.DatabasePageProperties)
+	if ok {
+		for _, prop := range props {
+			if prop.Type == notion.DBPropTypeTitle && len(prop.Title) > 0 {
+				title := tomarkdown.ConvertRichText(prop.Title)
+				if title != "" {
+					return fmt.Sprintf("%d:%s", i+1, title)
+				}
+			}
+		}
+	}
+	return fmt.Sprintf("%d:%s", i+1, page.ID)
 }
