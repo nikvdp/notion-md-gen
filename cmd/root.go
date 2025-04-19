@@ -27,8 +27,14 @@ var rootCmd = &cobra.Command{
 		}
 
 		// set parallelization options from viper flags
-		config.Parallelize = viper.GetBool("parallelize")
 		config.Parallelism = viper.GetInt("parallelism")
+		// if parallelism is 0, force serial mode
+		if config.Parallelism == 0 {
+			config.Parallelize = false
+			config.Parallelism = 1 // not used, but keep safe
+		} else {
+			config.Parallelize = viper.GetBool("parallelize")
+		}
 
 		if err := generator.Run(config); err != nil {
 			log.Println(err)
@@ -51,8 +57,8 @@ func init() {
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is notion-md-gen.yaml)")
 	// add flag to enable/disable parallelization
 	rootCmd.PersistentFlags().Bool("parallelize", true, "enable parallel fetching of block trees")
-	// add flag to set parallelism level
-	rootCmd.PersistentFlags().Int("parallelism", 4, "number of concurrent block tree fetches")
+	// add flag to set parallelism level, with short version -j
+	rootCmd.PersistentFlags().IntP("parallelism", "j", 5, "number of concurrent block tree fetches (use 0 for serial mode)")
 	// bind flags to viper
 	_ = viper.BindPFlag("parallelize", rootCmd.PersistentFlags().Lookup("parallelize"))
 	_ = viper.BindPFlag("parallelism", rootCmd.PersistentFlags().Lookup("parallelism"))
