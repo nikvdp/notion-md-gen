@@ -26,6 +26,10 @@ var rootCmd = &cobra.Command{
 			log.Fatal(err)
 		}
 
+		// set parallelization options from viper flags
+		config.Parallelize = viper.GetBool("parallelize")
+		config.Parallelism = viper.GetInt("parallelism")
+
 		if err := generator.Run(config); err != nil {
 			log.Println(err)
 		}
@@ -45,6 +49,13 @@ func init() {
 	cobra.OnInitialize(initConfig)
 
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is notion-md-gen.yaml)")
+	// add flag to enable/disable parallelization
+	rootCmd.PersistentFlags().Bool("parallelize", true, "enable parallel fetching of block trees")
+	// add flag to set parallelism level
+	rootCmd.PersistentFlags().Int("parallelism", 4, "number of concurrent block tree fetches")
+	// bind flags to viper
+	_ = viper.BindPFlag("parallelize", rootCmd.PersistentFlags().Lookup("parallelize"))
+	_ = viper.BindPFlag("parallelism", rootCmd.PersistentFlags().Lookup("parallelism"))
 }
 
 // initConfig reads in config file and ENV variables if set.

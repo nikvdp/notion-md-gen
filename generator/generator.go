@@ -27,28 +27,69 @@ func Run(config Config) error {
 	}
 	fmt.Println("✔ Querying Notion database: Completed")
 
-	// fetch page children
-	changed := 0 // number of article status changed
-	for i, page := range q.Results {
-		pageName := tomarkdown.ConvertRichText(page.Properties.(notion.DatabasePageProperties)["Name"].Title)
-		fmt.Printf("-- Article [%d/%d] %s --\n", i+1, len(q.Results), pageName)
-
-		// Get page blocks tree
-		blocks, err := queryBlockChildren(client, page.ID)
-		if err != nil {
-			return fmt.Errorf("error getting blocks: %v", err)
-		}
+	// helper to fetch, generate, and update status for a page
+	handlePage := func(i int, page notion.Page, blocks []notion.Block) error {
 		fmt.Println("✔ Getting blocks tree: Completed")
-
-		// Generate content to file
 		if err := generate(page, blocks, config.Markdown); err != nil {
 			return fmt.Errorf("error generating blog post: %v", err)
 		}
 		fmt.Println("✔ Generating blog post: Completed")
-
-		// Change status of blog post if desired
 		if changeStatus(client, page, config.Notion) {
-			changed++
+			// changed++ // not needed outside
+		}
+		return nil
+	}
+
+	changed := 0 // number of article status changed
+
+	if config.Parallelize {
+		// fetch block trees in parallel using a semaphore
+		sem := make(chan struct{}, config.Parallelism)
+		type result struct {
+			i      int
+			page   notion.Page
+			blocks []notion.Block
+			err    error
+		}
+		results := make(chan result, len(q.Results))
+		for i, page := range q.Results {
+			sem <- struct{}{}
+			go func(i int, page notion.Page) {
+				defer func() { <-sem }()
+				pageName := tomarkdown.ConvertRichText(page.Properties.(notion.DatabasePageProperties)["Name"].Title)
+				fmt.Printf("-- Article [%d/%d] %s --\n", i+1, len(q.Results), pageName)
+				blocks, err := queryBlockChildren(client, page.ID)
+				results <- result{i, page, blocks, err}
+			}(i, page)
+		}
+		// wait for all
+		for i := 0; i < len(q.Results); i++ {
+			res := <-results
+			if res.err != nil {
+				return fmt.Errorf("error getting blocks: %v", res.err)
+			}
+			if err := handlePage(res.i, res.page, res.blocks); err != nil {
+				return err
+			}
+			if changeStatus(client, res.page, config.Notion) {
+				changed++
+			}
+		}
+	} else {
+		// sequential fallback
+		for i, page := range q.Results {
+			pageName := tomarkdown.ConvertRichText(page.Properties.(notion.DatabasePageProperties)["Name"].Title)
+			fmt.Printf("-- Article [%d/%d] %s --\n", i+1, len(q.Results), pageName)
+			blocks, err := queryBlockChildren(client, page.ID)
+			if err != nil {
+				return fmt.Errorf("error getting blocks: %v", err)
+			}
+			if err := handlePage(i, page, blocks); err != nil {
+				return err
+			}
+			if changeStatus(client, page, config.Notion) {
+				changed++
+			}
 		}
 	}
 

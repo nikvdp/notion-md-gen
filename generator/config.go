@@ -30,6 +30,10 @@ type Markdown struct {
 type Config struct {
 	Notion   `yaml:"notion"`
 	Markdown `yaml:"markdown"`
+	// enable parallel fetching of block trees
+	Parallelize bool `yaml:"parallelize"`
+	// number of concurrent block tree fetches
+	Parallelism int `yaml:"parallelism"`
 }
 
 func DefaultConfigInit() error {
@@ -46,6 +50,10 @@ func DefaultConfigInit() error {
 			ImageSavePath:   "static/images/notion",
 			ImagePublicLink: "/images/notion",
 		},
+		// enable parallelization by default
+		Parallelize: true,
+		// default to 4 concurrent fetches
+		Parallelism: 4,
 	}
 	out, err := yaml.Marshal(defaultCfg)
 	if err != nil {
