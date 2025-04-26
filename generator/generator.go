@@ -14,7 +14,31 @@ import (
 	"github.com/dstotijn/go-notion"
 )
 
-func Run(config Config) error {
+// getpagetitle extracts the plain text title from page properties.
+func getPageTitle(page notion.Page) string {
+	props, ok := page.Properties.(notion.DatabasePageProperties)
+	if !ok {
+		return "" // or page.id if preferred as fallback
+	}
+	// look for a property named "title" or "name" case-insensitively
+	for key, prop := range props {
+		if prop.Type == notion.DBPropTypeTitle && (strings.EqualFold(key, "title") || strings.EqualFold(key, "name")) {
+			return tomarkdown.ConvertRichText(prop.Title)
+		}
+	}
+	// fallback: check all title properties just in case
+	for _, prop := range props {
+		if prop.Type == notion.DBPropTypeTitle && len(prop.Title) > 0 {
+			title := tomarkdown.ConvertRichText(prop.Title)
+			if title != "" {
+				return title
+			}
+		}
+	}
+	return "" // no title found
+}
+
+func Run(config Config, filterArgs []string) error {
 	if err := os.MkdirAll(config.Markdown.PostSavePath, 0755); err != nil {
 		return fmt.Errorf("couldn't create content folder: %s", err)
 	}
@@ -26,6 +50,37 @@ func Run(config Config) error {
 		return fmt.Errorf("❌ Querying Notion database: %s", err)
 	}
 	fmt.Println("✔ Querying Notion database: Completed")
+
+	// filter pages based on title and filterargs
+	pagesToProcess := []notion.Page{}
+	if len(filterArgs) > 0 {
+		fmt.Printf("Filtering pages by keywords: %v\n", filterArgs)
+		for _, page := range q.Results {
+			pageTitle := getPageTitle(page)
+			if pageTitle == "" {
+				continue // skip pages without a title
+			}
+			lowerTitle := strings.ToLower(pageTitle)
+			matchAll := true
+			for _, arg := range filterArgs {
+				if !strings.Contains(lowerTitle, strings.ToLower(arg)) {
+					matchAll = false
+					break
+				}
+			}
+			if matchAll {
+				pagesToProcess = append(pagesToProcess, page)
+			}
+		}
+		fmt.Printf("✔ Filtering completed: %d pages matched\n", len(pagesToProcess))
+	} else {
+		pagesToProcess = q.Results // no filters, process all pages
+	}
+
+	if len(pagesToProcess) == 0 {
+		fmt.Println("No pages found matching the criteria.")
+		return nil // exit gracefully if no pages match
+	}
 
 	// helper to fetch, generate, and update status for a page
 	handlePage := func(i int, page notion.Page, blocks []notion.Block, displayName string) error {
@@ -52,19 +107,19 @@ func Run(config Config) error {
 			err         error
 			displayName string
 		}
-		results := make(chan result, len(q.Results))
-		for i, page := range q.Results {
+		results := make(chan result, len(pagesToProcess))
+		for i, page := range pagesToProcess {
 			displayName := getPageDisplayName(i, page)
 			sem <- struct{}{}
 			go func(i int, page notion.Page, displayName string) {
 				defer func() { <-sem }()
-				fmt.Printf("[%-30s] -- article [%d/%d] --\n", displayName, i+1, len(q.Results))
+				fmt.Printf("[%-30s] -- article [%d/%d] --\n", displayName, i+1, len(pagesToProcess))
 				blocks, err := queryBlockChildren(client, page.ID)
 				results <- result{i, page, blocks, err, displayName}
 			}(i, page, displayName)
 		}
 		// wait for all
-		for i := 0; i < len(q.Results); i++ {
+		for i := 0; i < len(pagesToProcess); i++ {
 			res := <-results
 			if res.err != nil {
 				return fmt.Errorf("[%-30s] error getting blocks: %v", res.displayName, res.err)
@@ -78,9 +133,9 @@ func Run(config Config) error {
 		}
 	} else {
 		// sequential fallback
-		for i, page := range q.Results {
+		for i, page := range pagesToProcess {
 			displayName := getPageDisplayName(i, page)
-			fmt.Printf("[%-30s] -- article [%d/%d] --\n", displayName, i+1, len(q.Results))
+			fmt.Printf("[%-30s] -- article [%d/%d] --\n", displayName, i+1, len(pagesToProcess))
 			blocks, err := queryBlockChildren(client, page.ID)
 			if err != nil {
 				return fmt.Errorf("[%-30s] error getting blocks: %v", displayName, err)
@@ -141,16 +196,12 @@ func generateArticleFilename(title string, date time.Time, config Markdown) stri
 
 // getPageDisplayName returns a display name for a page: [index:PageName] or [index:PageID] if no name
 func getPageDisplayName(i int, page notion.Page) string {
-	props, ok := page.Properties.(notion.DatabasePageProperties)
-	if ok {
-		for _, prop := range props {
-			if prop.Type == notion.DBPropTypeTitle && len(prop.Title) > 0 {
-				title := tomarkdown.ConvertRichText(prop.Title)
-				if title != "" {
-					return fmt.Sprintf("%d:%s", i+1, title)
-				}
-			}
-		}
+	// use the new helper function to get the title
+	title := getPageTitle(page)
+	if title != "" {
+		return fmt.Sprintf("%d:%s", i+1, title)
 	}
+
+	// fallback to id if title extraction failed
 	return fmt.Sprintf("%d:%s", i+1, page.ID)
 }

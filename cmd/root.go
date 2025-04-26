@@ -18,6 +18,7 @@ var cfgFile string
 var rootCmd = &cobra.Command{
 	Use:   "notion-md-gen",
 	Short: "A markdown generator for notion",
+	Args:  cobra.ArbitraryArgs, // accept arbitrary arguments
 	// Uncomment the following line if your bare application
 	// has an action associated with it:
 	Run: func(cmd *cobra.Command, args []string) {
@@ -36,7 +37,7 @@ var rootCmd = &cobra.Command{
 			config.Parallelize = viper.GetBool("parallelize")
 		}
 
-		if err := generator.Run(config); err != nil {
+		if err := generator.Run(config, args); err != nil {
 			log.Println(err)
 		}
 	},
