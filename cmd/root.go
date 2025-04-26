@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"time"
 
 	"github.com/bonaysoft/notion-md-gen/generator"
 
@@ -37,7 +38,26 @@ var rootCmd = &cobra.Command{
 			config.Parallelize = viper.GetBool("parallelize")
 		}
 
-		if err := generator.Run(config, args); err != nil {
+		// parse since flag
+		var sinceTime *time.Time
+		sinceStr, _ := cmd.Flags().GetString("since")
+		if sinceStr != "" {
+			layoutLong := "20060102-15.04.05"
+			layoutShort := "20060102"
+			parsedTime, err := time.Parse(layoutLong, sinceStr)
+			if err != nil {
+				parsedTime, err = time.Parse(layoutShort, sinceStr)
+			}
+
+			if err != nil {
+				log.Printf("Error parsing --since flag value '%s': %v. Ignoring flag.", sinceStr, err)
+			} else {
+				sinceTime = &parsedTime
+				fmt.Printf("Filtering pages modified since: %s\n", sinceTime.Format(time.RFC3339))
+			}
+		}
+
+		if err := generator.Run(config, args, sinceTime); err != nil {
 			log.Println(err)
 		}
 	},
@@ -63,6 +83,9 @@ func init() {
 	// bind flags to viper
 	_ = viper.BindPFlag("parallelize", rootCmd.PersistentFlags().Lookup("parallelize"))
 	_ = viper.BindPFlag("parallelism", rootCmd.PersistentFlags().Lookup("parallelism"))
+
+	// add since flag
+	rootCmd.PersistentFlags().String("since", "", "retrieve only items modified since this date (YYYYMMDD or YYYYMMDD-HH.MM.SS)")
 }
 
 // initConfig reads in config file and ENV variables if set.

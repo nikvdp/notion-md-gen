@@ -38,7 +38,7 @@ func getPageTitle(page notion.Page) string {
 	return "" // no title found
 }
 
-func Run(config Config, filterArgs []string) error {
+func Run(config Config, filterArgs []string, since *time.Time) error {
 	if err := os.MkdirAll(config.Markdown.PostSavePath, 0755); err != nil {
 		return fmt.Errorf("couldn't create content folder: %s", err)
 	}
@@ -51,26 +51,43 @@ func Run(config Config, filterArgs []string) error {
 	}
 	fmt.Println("✔ Querying Notion database: Completed")
 
-	// filter pages based on title and filterargs
+	// filter pages based on args and --since flag
 	pagesToProcess := []notion.Page{}
-	if len(filterArgs) > 0 {
-		fmt.Printf("Filtering pages by keywords: %v\n", filterArgs)
+	filterActive := len(filterArgs) > 0 || since != nil
+	if filterActive {
+		if len(filterArgs) > 0 {
+			fmt.Printf("Filtering pages by keywords: %v\n", filterArgs)
+		}
+		if since != nil {
+			// fmt.Printf("Filtering pages modified since: %s\n", since.Format(time.RFC3339)) // already printed in root.go
+		}
 		for _, page := range q.Results {
-			pageTitle := getPageTitle(page)
-			if pageTitle == "" {
-				continue // skip pages without a title
+			// --since filter (last edited time)
+			if since != nil && !page.LastEditedTime.After(*since) {
+				continue
 			}
-			lowerTitle := strings.ToLower(pageTitle)
-			matchAll := true
-			for _, arg := range filterArgs {
-				if !strings.Contains(lowerTitle, strings.ToLower(arg)) {
-					matchAll = false
-					break
+
+			// title keyword filter
+			if len(filterArgs) > 0 {
+				pageTitle := getPageTitle(page)
+				if pageTitle == "" {
+					continue // skip pages without a title for keyword filtering
+				}
+				lowerTitle := strings.ToLower(pageTitle)
+				matchAllKeywords := true
+				for _, arg := range filterArgs {
+					if !strings.Contains(lowerTitle, strings.ToLower(arg)) {
+						matchAllKeywords = false
+						break
+					}
+				}
+				if !matchAllKeywords {
+					continue // skip if title doesn't match all keywords
 				}
 			}
-			if matchAll {
-				pagesToProcess = append(pagesToProcess, page)
-			}
+
+			// if we got here, the page passed all active filters
+			pagesToProcess = append(pagesToProcess, page)
 		}
 		fmt.Printf("✔ Filtering completed: %d pages matched\n", len(pagesToProcess))
 	} else {
