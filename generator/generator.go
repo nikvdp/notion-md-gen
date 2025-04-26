@@ -38,9 +38,14 @@ func getPageTitle(page notion.Page) string {
 	return "" // no title found
 }
 
-func Run(config Config, filterArgs []string, since *time.Time) error {
+func Run(config Config, filterArgs []string, since *time.Time, dryRun bool) error {
 	if err := os.MkdirAll(config.Markdown.PostSavePath, 0755); err != nil {
-		return fmt.Errorf("couldn't create content folder: %s", err)
+		// even in dry run, we might need the path conceptually, but check if it exists
+		// let's not create it if dry-run, maybe check later if needed?
+		// for now, let's skip creating the dir in dry-run mode.
+		if !dryRun {
+			return fmt.Errorf("couldn't create content folder: %s", err)
+		}
 	}
 
 	// find database page
@@ -99,7 +104,21 @@ func Run(config Config, filterArgs []string, since *time.Time) error {
 		return nil // exit gracefully if no pages match
 	}
 
-	// helper to fetch, generate, and update status for a page
+	// handle dry run: print titles and exit
+	if dryRun {
+		fmt.Println("\n-- Dry Run Active --")
+		fmt.Println("Articles that would be processed:")
+		for i, page := range pagesToProcess {
+			title := getPageTitle(page)
+			if title == "" {
+				title = "[Untitled Page: " + page.ID + "]"
+			}
+			fmt.Printf("  %d: %s (ID: %s, LastEdited: %s)\n", i+1, title, page.ID, page.LastEditedTime.Local().Format(time.RFC822))
+		}
+		return nil
+	}
+
+	// helper to fetch, generate, and update status for a page (only runs if not dryRun)
 	handlePage := func(i int, page notion.Page, blocks []notion.Block, displayName string) error {
 		fmt.Printf("[%-30s] ✔ getting blocks tree: completed\n", displayName)
 		if err := generate(page, blocks, config.Markdown); err != nil {

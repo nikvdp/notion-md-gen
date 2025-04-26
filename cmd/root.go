@@ -57,7 +57,10 @@ var rootCmd = &cobra.Command{
 			}
 		}
 
-		if err := generator.Run(config, args, sinceTime); err != nil {
+		// get dry-run flag value
+		dryRun, _ := cmd.Flags().GetBool("dry-run")
+
+		if err := generator.Run(config, args, sinceTime, dryRun); err != nil {
 			log.Println(err)
 		}
 	},
@@ -86,6 +89,8 @@ func init() {
 
 	// add since flag
 	rootCmd.PersistentFlags().String("since", "", "retrieve only items modified since this date (YYYYMMDD or YYYYMMDD-HH.MM.SS)")
+	// add dry-run flag
+	rootCmd.PersistentFlags().Bool("dry-run", false, "list matching articles without downloading or changing status")
 }
 
 // initConfig reads in config file and ENV variables if set.
