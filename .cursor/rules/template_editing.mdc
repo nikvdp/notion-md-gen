@@ -1,0 +1,38 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# Editing Markdown Templates
+
+Markdown output is generated using Go templates located in `[pkg/tomarkdown/templates/](mdc:pkg/tomarkdown/templates)`.
+
+## Template Files
+
+*   Each Notion block type typically has a corresponding `.gohtml` file (e.g., `[bulleted_list_item.gohtml](mdc:pkg/tomarkdown/templates/bulleted_list_item.gohtml)`, `[paragraph.gohtml](mdc:pkg/tomarkdown/templates/paragraph.gohtml)`).
+*   Templates receive an `MdBlock` struct (defined in `[pkg/tomarkdown/tomarkdown.go](mdc:pkg/tomarkdown/tomarkdown.go)`) which contains the `notion.Block` data, `Depth` for indentation, and an `Extra` map.
+*   Template functions like `rich2md` (for rendering Notion RichText) and `childMarkdown` (for rendering nested blocks) are provided via `[GenBlock](mdc:pkg/tomarkdown/tomarkdown.go)`. The `childMarkdown` function is crucial for handling nested content correctly, especially within lists.
+
+## Editing Templates (Newline Sensitivity)
+
+*   **Issue:** Directly editing these template files using the standard AI edit tools can sometimes fail, especially when precise control over newlines is required (which is common in Markdown).
+*   **Workaround:** Use terminal commands like `printf` or `echo -e` to overwrite the template file content. This provides explicit control over newlines (`\n`) and special characters.
+
+    *Example using `printf` to overwrite `paragraph.gohtml` (note the explicit newline placement):*
+    ```bash
+    printf '%s\n%s\n%s' \
+      '{{if .Paragraph -}}' \
+      '{{if gt .Depth 0}}{{"  " | repeat .Depth}}{{end}}{{ rich2md .Paragraph.Text }}' \
+      '{{- end}}' \
+      > pkg/tomarkdown/templates/paragraph.gohtml
+    ```
+
+*   **Important:** Be careful with escaping special characters (like backticks `` ` ``) within the shell command.
+
+## Testing Changes
+
+*   After modifying templates, run the unit tests to ensure correctness:
+    ```bash
+    go test ./pkg/tomarkdown
+    ```
+*   Refer to the golden files (`*.md`) in `[pkg/tomarkdown/testdata/](mdc:pkg/tomarkdown/testdata)` for expected output.

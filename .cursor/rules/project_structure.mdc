@@ -1,0 +1,28 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# Project Structure and Logic Flow
+
+This project fetches Notion pages/databases and converts them to Markdown.
+
+## Key Directories:
+
+*   `cmd/`: Contains the main application entry point and command-line flag handling using Cobra.
+*   `generator/`: Handles fetching data from the Notion API (`generator/notion.go`), orchestrating the page processing (`generator/generator.go`), and applying configuration (`generator/config.go`).
+*   `pkg/tomarkdown/`: Contains the core Notion block to Markdown conversion logic (`pkg/tomarkdown/tomarkdown.go`) and the Go templates (`pkg/tomarkdown/templates/`).
+*   `main.go`: The minimal main entry point that calls into the `cmd` package.
+
+## Logic Flow:
+
+1.  Execution starts in `[main.go](mdc:main.go)`, which executes the root Cobra command from the `cmd/` package.
+2.  The core logic resides in `[generator.Run](mdc:generator/generator.go)`. It initializes the Notion client.
+3.  Pages/database entries are fetched using `[queryDatabase](mdc:generator/notion.go)`.
+4.  For each page to process, the full block tree (including nested children) is fetched recursively by `[retrieveBlockChildren](mdc:generator/notion.go)`.
+5.  The list of blocks (with populated children) is passed to `[tomarkdown.GenerateTo](mdc:pkg/tomarkdown/tomarkdown.go)`.
+6.  `[GenerateTo](mdc:pkg/tomarkdown/tomarkdown.go)` handles front matter and then calls `[GenContentBlocks](mdc:pkg/tomarkdown/tomarkdown.go)`.
+7.  `[GenContentBlocks](mdc:pkg/tomarkdown/tomarkdown.go)` iterates through blocks, calling `[GenBlock](mdc:pkg/tomarkdown/tomarkdown.go)` for each.
+8.  `[GenBlock](mdc:pkg/tomarkdown/tomarkdown.go)` selects the appropriate `.gohtml` template from `[pkg/tomarkdown/templates/](mdc:pkg/tomarkdown/templates)` based on the block type.
+9.  Templates use functions like `rich2md` and `childMarkdown` (defined in `[GenBlock](mdc:pkg/tomarkdown/tomarkdown.go)`) to render content. `childMarkdown` recursively calls `[GenContentBlocks](mdc:pkg/tomarkdown/tomarkdown.go)` to render nested blocks.
+10. The final Markdown is written to the output file specified in the configuration.
