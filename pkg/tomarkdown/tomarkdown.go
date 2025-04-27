@@ -198,24 +198,39 @@ func (tm *ToMarkdown) GenBlock(bType notion.BlockType, block MdBlock) error {
 	funcs["indentCode"] = func(richText []notion.RichText, depth int) string {
 		// Get the content without any manipulation
 		content := ConvertRichText(richText)
-		
+
 		// If depth is 0, no indentation needed
 		if depth == 0 {
 			return content
 		}
-		
+
 		// Apply indentation based on depth
 		indent := strings.Repeat("  ", depth)
-		
+
 		// Split into lines for processing
 		lines := strings.Split(content, "\n")
-		
+
 		// Apply the correct indentation to each line
 		for i := 0; i < len(lines); i++ {
 			lines[i] = indent + lines[i]
 		}
-		
+
 		// Join lines back together
+		return strings.Join(lines, "\n")
+	}
+
+	funcs["indentLines"] = func(content string, depth int) string {
+		// no indentation needed when depth is 0
+		if depth == 0 {
+			return content
+		}
+
+		indent := strings.Repeat("  ", depth)
+		lines := strings.Split(content, "\n")
+		for i := 0; i < len(lines); i++ {
+			lines[i] = indent + lines[i]
+		}
+
 		return strings.Join(lines, "\n")
 	}
 

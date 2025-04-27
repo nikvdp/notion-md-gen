@@ -1,2 +1,4 @@
-{{if gt .Depth 0}}{{"  " | repeat .Depth}}{{end}}- {{ rich2md .BulletedListItem.Text }}
+{{if .BulletedListItem -}}
+{{if gt .Depth 0}}{{"    " | repeat .Depth}}{{end}}- {{ rich2md .BulletedListItem.Text }}
+{{- end}}
 {{if .Block.HasChildren}}{{"\n"}}{{end}}

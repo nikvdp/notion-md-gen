@@ -1,2 +1,5 @@
-{{if gt .Depth 0}}{{"  " | repeat .Depth}}{{end}}{{ rich2md .Paragraph.Text }}
+{{if .Paragraph -}}
+{{if gt .Depth 0}}{{"    " | repeat .Depth}}{{end}}{{ rich2md .Paragraph.Text }}
+{{- end}}
+{{if .Block.HasChildren}}{{"\n"}}{{end}}
 

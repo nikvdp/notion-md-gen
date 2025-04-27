@@ -1,0 +1,6 @@
+{{if .Toggle -}}
+{{if gt .Depth 0}}{{"    " | repeat .Depth}}{{end}}<details>
+{{if gt .Depth 0}}{{"    " | repeat .Depth}}{{end}}<summary>{{ rich2md .Toggle.Text }}</summary>
+{{if gt .Depth 0}}{{"    " | repeat .Depth}}{{end}}{{ childMarkdown .Block.Children .Depth }}
+{{if gt .Depth 0}}{{"    " | repeat .Depth}}{{end}}</details>
+{{- end}} 

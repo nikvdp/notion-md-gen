@@ -1,2 +1,4 @@
-> {{ rich2md .Quote.Text }}
+{{if .Quote -}}
+{{if gt .Depth 0}}{{"    " | repeat .Depth}}{{end}}> {{ rich2md .Quote.Text }}
+{{- end}}
 
