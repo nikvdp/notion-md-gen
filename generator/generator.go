@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/bonaysoft/notion-md-gen/pkg/tomarkdown"
@@ -39,6 +40,10 @@ func getPageTitle(page notion.Page) string {
 }
 
 func Run(config Config, filterArgs []string, since *time.Time, dryRun bool) error {
+	if config.CacheFile == "" {
+		config.CacheFile = ".notion-md-gen-cache.json"
+	}
+
 	if err := os.MkdirAll(config.Markdown.PostSavePath, 0755); err != nil {
 		// even in dry run, we might need the path conceptually, but check if it exists
 		// let's not create it if dry-run, maybe check later if needed?
@@ -104,6 +109,38 @@ func Run(config Config, filterArgs []string, since *time.Time, dryRun bool) erro
 		return nil // exit gracefully if no pages match
 	}
 
+	cache := defaultCache()
+	if config.Incremental {
+		loadedCache, err := loadCache(config.CacheFile)
+		if err != nil {
+			return fmt.Errorf("failed loading cache file %q: %w", config.CacheFile, err)
+		}
+		cache = loadedCache
+	}
+
+	unchangedSkipped := 0
+	filteredPages := make([]notion.Page, 0, len(pagesToProcess))
+	for _, page := range pagesToProcess {
+		title := getPageTitle(page)
+		if title == "" {
+			title = page.ID
+		}
+		outputRelPath := generateArticleFilename(title, page.CreatedTime, config.Markdown)
+		outputAbsPath := filepath.Join(config.Markdown.PostSavePath, outputRelPath)
+		pageEditedAt := cacheTimestamp(page.LastEditedTime)
+
+		entry, found := cache.Pages[page.ID]
+		skipAsUnchanged := config.Incremental && found && entry.LastEdited == pageEditedAt
+		if skipAsUnchanged {
+			if _, err := os.Stat(outputAbsPath); err == nil {
+				unchangedSkipped++
+				continue
+			}
+		}
+		filteredPages = append(filteredPages, page)
+	}
+	pagesToProcess = filteredPages
+
 	// handle dry run: print titles and exit
 	if dryRun {
 		fmt.Println("\n-- Dry Run Active --")
@@ -118,53 +155,89 @@ func Run(config Config, filterArgs []string, since *time.Time, dryRun bool) erro
 		return nil
 	}
 
+	if config.Incremental && unchangedSkipped > 0 {
+		fmt.Printf("✔ Incremental sync: skipped %d unchanged pages\n", unchangedSkipped)
+	}
+
+	if len(pagesToProcess) == 0 {
+		fmt.Println("No changed pages to process.")
+		return nil
+	}
+
 	// helper to fetch, generate, and update status for a page (only runs if not dryRun)
-	handlePage := func(i int, page notion.Page, blocks []notion.Block, displayName string) error {
+	handlePage := func(page notion.Page, blocks []notion.Block, displayName string, previousOutputRelPath string) (string, error) {
 		fmt.Printf("[%-30s] ✔ getting blocks tree: completed\n", displayName)
-		if err := generate(page, blocks, config.Markdown); err != nil {
-			return fmt.Errorf("[%-30s] error generating blog post: %v", displayName, err)
+		title := getPageTitle(page)
+		if title == "" {
+			title = page.ID
+		}
+		outputRelPath := generateArticleFilename(title, page.CreatedTime, config.Markdown)
+		outputAbsPath := filepath.Join(config.Markdown.PostSavePath, outputRelPath)
+
+		if config.Incremental && previousOutputRelPath != "" && previousOutputRelPath != outputRelPath {
+			previousFile := filepath.Join(config.Markdown.PostSavePath, previousOutputRelPath)
+			if _, err := os.Stat(previousFile); err == nil {
+				_ = os.Remove(previousFile)
+			}
+		}
+
+		if err := generate(page, blocks, config.Markdown, outputAbsPath, title); err != nil {
+			return "", fmt.Errorf("[%-30s] error generating blog post: %v", displayName, err)
 		}
 		fmt.Printf("[%-30s] ✔ generating blog post: completed\n", displayName)
-		if changeStatus(client, page, config.Notion) {
-			// changed++ // not needed outside
-		}
-		return nil
+		return outputRelPath, nil
 	}
 
 	changed := 0 // number of article status changed
 
 	if config.Parallelize {
-		// fetch block trees in parallel using a semaphore
+		// fetch and render pages in parallel using a bounded semaphore
 		sem := make(chan struct{}, config.Parallelism)
-		type result struct {
-			i           int
-			page        notion.Page
-			blocks      []notion.Block
-			err         error
-			displayName string
-		}
-		results := make(chan result, len(pagesToProcess))
+		errCh := make(chan error, len(pagesToProcess))
+		var wg sync.WaitGroup
+		var mu sync.Mutex
+
 		for i, page := range pagesToProcess {
 			displayName := getPageDisplayName(i, page)
 			sem <- struct{}{}
+			wg.Add(1)
 			go func(i int, page notion.Page, displayName string) {
+				defer wg.Done()
 				defer func() { <-sem }()
 				fmt.Printf("[%-30s] -- article [%d/%d] --\n", displayName, i+1, len(pagesToProcess))
 				blocks, err := queryBlockChildren(client, page.ID)
-				results <- result{i, page, blocks, err, displayName}
+				if err != nil {
+					errCh <- fmt.Errorf("[%-30s] error getting blocks: %v", displayName, err)
+					return
+				}
+				var previousOutputRelPath string
+				if config.Incremental {
+					if prev, ok := cache.Pages[page.ID]; ok {
+						previousOutputRelPath = prev.OutputPath
+					}
+				}
+				outputRelPath, err := handlePage(page, blocks, displayName, previousOutputRelPath)
+				if err != nil {
+					errCh <- err
+					return
+				}
+				statusChanged := changeStatus(client, page, config.Notion)
+				mu.Lock()
+				cache.Pages[page.ID] = cacheEntry{
+					LastEdited: cacheTimestamp(page.LastEditedTime),
+					OutputPath: outputRelPath,
+				}
+				if statusChanged {
+					changed++
+				}
+				mu.Unlock()
 			}(i, page, displayName)
 		}
-		// wait for all
-		for i := 0; i < len(pagesToProcess); i++ {
-			res := <-results
-			if res.err != nil {
-				return fmt.Errorf("[%-30s] error getting blocks: %v", res.displayName, res.err)
-			}
-			if err := handlePage(res.i, res.page, res.blocks, res.displayName); err != nil {
+		wg.Wait()
+		close(errCh)
+		for err := range errCh {
+			if err != nil {
 				return err
-			}
-			if changeStatus(client, res.page, config.Notion) {
-				changed++
 			}
 		}
 	} else {
@@ -176,8 +249,19 @@ func Run(config Config, filterArgs []string, since *time.Time, dryRun bool) erro
 			if err != nil {
 				return fmt.Errorf("[%-30s] error getting blocks: %v", displayName, err)
 			}
-			if err := handlePage(i, page, blocks, displayName); err != nil {
+			var previousOutputRelPath string
+			if config.Incremental {
+				if prev, ok := cache.Pages[page.ID]; ok {
+					previousOutputRelPath = prev.OutputPath
+				}
+			}
+			outputRelPath, err := handlePage(page, blocks, displayName, previousOutputRelPath)
+			if err != nil {
 				return err
+			}
+			cache.Pages[page.ID] = cacheEntry{
+				LastEdited: cacheTimestamp(page.LastEditedTime),
+				OutputPath: outputRelPath,
 			}
 			if changeStatus(client, page, config.Notion) {
 				changed++
@@ -185,20 +269,29 @@ func Run(config Config, filterArgs []string, since *time.Time, dryRun bool) erro
 		}
 	}
 
+	if config.Incremental {
+		if err := saveCache(config.CacheFile, cache); err != nil {
+			return fmt.Errorf("failed writing cache file %q: %w", config.CacheFile, err)
+		}
+		fmt.Printf("✔ Cache updated: %s\n", config.CacheFile)
+	}
+
+	fmt.Printf("✔ Sync complete: processed=%d, skipped=%d, status-updated=%d\n", len(pagesToProcess), unchangedSkipped, changed)
+
 	return nil
 }
 
-func generate(page notion.Page, blocks []notion.Block, config Markdown) error {
+func generate(page notion.Page, blocks []notion.Block, config Markdown, outputAbsPath string, pageName string) error {
 	// Create file
 
 	// fmt.Println("Page: ", page.Properties.(notion.DatabasePageProperties)["title"].Title)
 	// fmt.Println("Title: ", page.Properties.(notion.DatabasePageProperties)["title"].Title[0].Text.Content)
 	// pageName := config.PageNamePrefix + tomarkdown.ConvertRichText(page.Properties.(notion.DatabasePageProperties)["Name"].Title)
-	pageName := tomarkdown.ConvertRichText(page.Properties.(notion.DatabasePageProperties)["Title"].Title)
-	f, err := os.Create(filepath.Join(config.PostSavePath, generateArticleFilename(pageName, page.CreatedTime, config)))
+	f, err := os.Create(outputAbsPath)
 	if err != nil {
 		return fmt.Errorf("error create file: %s", err)
 	}
+	defer f.Close()
 
 	// Generate markdown content to the file
 	tm := tomarkdown.New()

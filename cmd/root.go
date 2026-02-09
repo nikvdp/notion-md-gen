@@ -59,6 +59,10 @@ var rootCmd = &cobra.Command{
 
 		// get dry-run flag value
 		dryRun, _ := cmd.Flags().GetBool("dry-run")
+		incremental, _ := cmd.Flags().GetBool("incremental")
+		cacheFile, _ := cmd.Flags().GetString("cache-file")
+		config.Incremental = incremental
+		config.CacheFile = cacheFile
 
 		if err := generator.Run(config, args, sinceTime, dryRun); err != nil {
 			log.Println(err)
@@ -91,6 +95,8 @@ func init() {
 	rootCmd.PersistentFlags().String("since", "", "retrieve only items modified since this date (YYYYMMDD or YYYYMMDD-HH.MM.SS)")
 	// add dry-run flag
 	rootCmd.PersistentFlags().Bool("dry-run", false, "list matching articles without downloading or changing status")
+	rootCmd.PersistentFlags().Bool("incremental", true, "skip pages that have not changed since the last run")
+	rootCmd.PersistentFlags().String("cache-file", ".notion-md-gen-cache.json", "cache file path used for incremental sync state")
 }
 
 // initConfig reads in config file and ENV variables if set.

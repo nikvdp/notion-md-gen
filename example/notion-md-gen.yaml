@@ -10,3 +10,5 @@ markdown:
   postSavePath: posts/notion
   imageSavePath: static/images/posts
   imagePublicLink: /images/posts
+incremental: true
+cacheFile: .notion-md-gen-cache.json

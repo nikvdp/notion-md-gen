@@ -259,12 +259,19 @@ func (tm *ToMarkdown) GenBlock(bType notion.BlockType, block MdBlock) error {
 // downloadImage fetches the external image or file-based image, saves it locally, and updates its URL
 func (tm *ToMarkdown) downloadImage(image *notion.FileBlock) error {
 	download := func(imgURL string) (string, error) {
+		localPath, visitPath, err := tm.buildImagePaths(imgURL, tm.ImgSavePath)
+		if err != nil {
+			return "", err
+		}
+		if _, err := os.Stat(localPath); err == nil {
+			return visitPath, nil
+		}
 		resp, err := http.Get(imgURL)
 		if err != nil {
 			return "", err
 		}
 		defer resp.Body.Close()
-		return tm.saveTo(resp.Body, imgURL, tm.ImgSavePath)
+		return tm.saveTo(resp.Body, localPath, visitPath, tm.ImgSavePath)
 	}
 
 	var err error
@@ -287,12 +294,10 @@ func (tm *ToMarkdown) downloadImage(image *notion.FileBlock) error {
 	return err
 }
 
-// saveTo saves the content of reader into distDir, generating a filename from
-// rawURL. Returns the final new path for the local or site image usage.
-func (tm *ToMarkdown) saveTo(reader io.Reader, rawURL, distDir string) (string, error) {
+func (tm *ToMarkdown) buildImagePaths(rawURL, distDir string) (string, string, error) {
 	u, err := url.Parse(rawURL)
 	if err != nil {
-		return "", fmt.Errorf("malformed url: %s", err)
+		return "", "", fmt.Errorf("malformed url: %s", err)
 	}
 
 	splitPaths := strings.Split(u.Path, "/")
@@ -300,14 +305,18 @@ func (tm *ToMarkdown) saveTo(reader io.Reader, rawURL, distDir string) (string, 
 	if strings.HasPrefix(imageFilename, "Untitled.") {
 		imageFilename = splitPaths[len(splitPaths)-2] + filepath.Ext(u.Path)
 	}
-	if err := os.MkdirAll(distDir, 0755); err != nil {
-		return "", fmt.Errorf("%s: %s", distDir, err)
-	}
-
 	// Create a unique filename using the full URL path to avoid collisions
 	urlPath := strings.Join(splitPaths, "_")
 	filename := fmt.Sprintf("%s_%s_%s", u.Hostname(), urlPath, imageFilename)
-	out, err := os.Create(filepath.Join(distDir, filename))
+	return filepath.Join(distDir, filename), filepath.Join(tm.ImgVisitPath, filename), nil
+}
+
+// saveTo saves the content of reader into distDir and returns the final public path.
+func (tm *ToMarkdown) saveTo(reader io.Reader, localPath, visitPath, distDir string) (string, error) {
+	if err := os.MkdirAll(distDir, 0755); err != nil {
+		return "", fmt.Errorf("%s: %s", distDir, err)
+	}
+	out, err := os.Create(localPath)
 	if err != nil {
 		return "", fmt.Errorf("couldn't create image file: %s", err)
 	}
@@ -317,7 +326,7 @@ func (tm *ToMarkdown) saveTo(reader io.Reader, rawURL, distDir string) (string, 
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(tm.ImgVisitPath, filename), nil
+	return visitPath, nil
 }
 
 // injectBookmarkInfo sets image, title, and description from opengraph into the block's Extra map

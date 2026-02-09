@@ -34,6 +34,10 @@ type Config struct {
 	Parallelize bool `yaml:"parallelize"`
 	// number of concurrent block tree fetches
 	Parallelism int `yaml:"parallelism"`
+	// skip unchanged pages using a local cache file
+	Incremental bool `yaml:"incremental"`
+	// cache file path for incremental sync state
+	CacheFile string `yaml:"cacheFile"`
 }
 
 func DefaultConfigInit() error {
@@ -54,6 +58,8 @@ func DefaultConfigInit() error {
 		Parallelize: true,
 		// default to 4 concurrent fetches
 		Parallelism: 4,
+		Incremental: true,
+		CacheFile:   ".notion-md-gen-cache.json",
 	}
 	out, err := yaml.Marshal(defaultCfg)
 	if err != nil {
