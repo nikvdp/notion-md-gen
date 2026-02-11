@@ -30,9 +30,8 @@ builds:
         goarch: arm64
 
 archives:
-  - name_template: "{{ .ProjectName }}-{{ .Os }}-{{ .Arch }}"
-    replacements:
-      darwin: macos
+  - name_template: >-
+      {{ .ProjectName }}-{{ if eq .Os "darwin" }}macos{{ else }}{{ .Os }}{{ end }}-{{ .Arch }}
     format: tar.gz
     format_overrides: # archive as zip on Windows
       - goos: windows
