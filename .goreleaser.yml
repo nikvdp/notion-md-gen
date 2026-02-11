@@ -31,7 +31,7 @@ builds:
 
 archives:
   - name_template: >-
-      {{ .ProjectName }}-{{ if eq .Os "darwin" }}macos{{ else }}{{ .Os }}{{ end }}-{{ .Arch }}
+      {{ .ProjectName }}-{{ if eq .Os "darwin" }}macos{{ else }}{{ .Os }}{{ end }}-{{ .Arch }}{{ with .Arm }}v{{ . }}{{ end }}
     format: tar.gz
     format_overrides: # archive as zip on Windows
       - goos: windows
