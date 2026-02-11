@@ -9,30 +9,30 @@ on:
 jobs:
   test:
     name: Test
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-latest
     steps:
       - name: Set up Go
-        uses: actions/setup-go@v2
+        uses: actions/setup-go@v5
         with:
           go-version: 1.17.x
       - name: Check out code
-        uses: actions/checkout@v1
+        uses: actions/checkout@v4
       - name: Run Unit tests.
         run: make test
       - name: Upload Coverage report to CodeCov
-        uses: codecov/codecov-action@v1
+        uses: codecov/codecov-action@v4
         with:
           file: .coverprofile
   build:
     name: Build
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-latest
     needs: [test]
     steps:
       - name: Set up Go
-        uses: actions/setup-go@v2
+        uses: actions/setup-go@v5
         with:
           go-version: 1.17.x
       - name: Check out code
-        uses: actions/checkout@v1
+        uses: actions/checkout@v4
       - name: Build
         run: make build

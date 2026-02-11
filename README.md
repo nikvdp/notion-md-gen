@@ -19,8 +19,11 @@ cli or even automate your blog repo to update itself with the Github Action.
 ### install.sh
 
 ```bash
-curl -sSf https://raw.githubusercontent.com/bonaysoft/notion-md-gen/master/install.sh | sh
+curl -sSf https://raw.githubusercontent.com/nikvdp/notion-md-gen/master/install.sh | sh
 ```
+
+The installer downloads the latest prebuilt release binary (no local Go compile required).
+Supported in installer: Linux/macOS on `amd64` and `arm64`.
 
 ### webi (not ready)
 
@@ -42,6 +45,19 @@ brew install notion-md-gen
 cd your-blog-dir
 notion-md-gen init
 notion-md-gen
+```
+
+Useful flags:
+
+```bash
+# only process changed pages (default: true)
+notion-md-gen --incremental
+
+# force full regeneration
+notion-md-gen --incremental=false
+
+# customize cache location
+notion-md-gen --cache-file .notion-md-gen-cache.json
 ```
 
 ### Github Action

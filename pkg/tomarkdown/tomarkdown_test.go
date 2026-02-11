@@ -22,6 +22,9 @@ func testTarget(t *testing.T, target string) {
 		if d.IsDir() {
 			return nil
 		}
+		if !strings.HasSuffix(path, ".json") {
+			return nil
+		}
 
 		blockBytes, err := testdatas.ReadFile(path)
 		assert.NoError(t, err)
